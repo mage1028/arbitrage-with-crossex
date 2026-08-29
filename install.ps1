@@ -2,7 +2,8 @@
   Arbitrage with CrossEx - Windows installer.
 
   Usage (paste into PowerShell):
-    irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/install.ps1 | iex
+    $env:BOROS_REF = '<audited-commit-sha>'
+    irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/install.ps1" | iex
 
   What this script does - and everything it does:
     1. Downloads a private copy of Node.js (official nodejs.org build, checksum
@@ -33,7 +34,7 @@ $ProgressPreference = 'SilentlyContinue'  # Invoke-WebRequest is far faster with
 # ---------------------------------------------------------------------------
 # Configuration (BOROS_* env vars exist for development/testing overrides)
 # ---------------------------------------------------------------------------
-$RepoSlug = if ($env:BOROS_REPO)   { $env:BOROS_REPO }   else { 'pendle-finance/arbitrage-with-crossex' }
+$RepoSlug = if ($env:BOROS_REPO)   { $env:BOROS_REPO }   else { 'mage1028/arbitrage-with-crossex' }
 $Branch   = if ($env:BOROS_BRANCH) { $env:BOROS_BRANCH } else { 'main' }
 # Pin an exact commit, tag or branch: BOROS_REF wins over BOROS_BRANCH. This is
 # how you install the very tree you audited - see "Install exactly what you
@@ -41,7 +42,9 @@ $Branch   = if ($env:BOROS_BRANCH) { $env:BOROS_BRANCH } else { 'main' }
 $Ref      = $env:BOROS_REF
 $Port     = if ($env:BOROS_PORT)   { [int]$env:BOROS_PORT } else { 6688 }
 $Root     = if ($env:BOROS_ROOT)   { $env:BOROS_ROOT }   else { Join-Path $env:LOCALAPPDATA 'CrossEx-Boros' }
-$NodeLine = 'v24'
+$NodeVersion = 'v24.20.0'
+$YarnVersion = '1.22.22'
+$YarnTarballSha256 = 'c17d3797fb9a9115bf375e31bfd30058cac6bc9c3b8807a3d8cb2094794b51ca'
 $TaskName = 'Arbitrage with CrossEx'
 $AppTitle = 'Arbitrage with CrossEx'
 # Display names this app shipped under before. The scheduled task and the Start
@@ -195,18 +198,16 @@ function Install-Node {
   $nodeExe = Join-Path $Root 'node\node.exe'
   if (Test-Path $nodeExe) {
     $v = (& $nodeExe -v 2>$null)
-    if ($v -and $v.StartsWith($NodeLine)) { Say "Node.js $v already installed - skipping."; return }
+    if ($v -eq $NodeVersion) { Say "Node.js $v already installed - skipping."; return }
   }
   $arch = Get-NodeArch
-  Say "Downloading Node.js (official nodejs.org build, $arch)..."
-  $base = "https://nodejs.org/dist/latest-$NodeLine.x"
-  $sums = (Invoke-WebRequest -UseBasicParsing -Uri "$base/SHASUMS256.txt").Content
-
-  $line = $sums -split "`n" | Where-Object { $_ -match "node-$NodeLine[\d.]*-win-$arch\.zip$" } | Select-Object -First 1
-  if (-not $line) { Fail "could not resolve the latest Node.js $NodeLine zip for win-$arch." }
-  $parts = $line.Trim() -split '\s+'
-  $expected = $parts[0]
-  $file = $parts[-1]
+  Say "Downloading Node.js $NodeVersion (official nodejs.org build, $arch)..."
+  $base = "https://nodejs.org/dist/$NodeVersion"
+  $expected = switch ($arch) {
+    'arm64' { '31c6799744de8a54601643098040c68c3697e56c94e407d61d0e5fa5f34191d7' }
+    'x64'   { '6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba' }
+  }
+  $file = "node-$NodeVersion-win-$arch.zip"
 
   $zip = Join-Path $script:Tmp $file
   Invoke-WebRequest -UseBasicParsing -Uri "$base/$file" -OutFile $zip
@@ -228,16 +229,20 @@ function Install-Node {
 function Install-Yarn {
   $nodeDir = Join-Path $Root 'node'
   $yarn = Join-Path $nodeDir 'yarn.cmd'
-  if (Test-Path $yarn) { return }
-  Say 'Installing the yarn package manager (into the private runtime only)...'
+  if ((Test-Path $yarn) -and ((& $yarn -v 2>$null) -eq $YarnVersion)) { return }
+  Say "Installing Yarn $YarnVersion (into the private runtime only)..."
   $npm = Join-Path $nodeDir 'npm.cmd'
+  $yarnTgz = Join-Path $script:Tmp "yarn-$YarnVersion.tgz"
+  Invoke-WebRequest -UseBasicParsing -Uri "https://registry.npmjs.org/yarn/-/yarn-$YarnVersion.tgz" -OutFile $yarnTgz
+  $actual = (Get-FileHash -Algorithm SHA256 -Path $yarnTgz).Hash.ToLowerInvariant()
+  if ($actual -ne $YarnTarballSha256) { Fail 'Yarn download failed checksum verification.' }
   # --prefix is not optional here. On Windows npm's global prefix defaults to
   # %APPDATA%\npm, NOT the folder holding node.exe, so a bare `install -g` would
   # scatter yarn outside the private runtime - and $Root\node\yarn.cmd, which
   # everything downstream calls, would never appear. Pinning the prefix keeps the
   # runtime self-contained and removable in one delete, which is the promise the
   # installer makes.
-  & $npm install -g --silent --prefix "$nodeDir" 'yarn@1.22.22' 2>&1 | Out-Null
+  & $npm install -g --silent --prefix "$nodeDir" $yarnTgz 2>&1 | Out-Null
   if (-not (Test-Path $yarn)) {
     Fail "yarn installation failed (expected $yarn)."
   }

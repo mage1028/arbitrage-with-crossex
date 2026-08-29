@@ -79,6 +79,13 @@ export function versionRoutes(deps: AppDeps) {
         pin = value?.commit ?? null;
       }
 
+      if (!pin) {
+        return refuse(
+          'the update target commit could not be verified — retry after the update check succeeds',
+          true,
+        );
+      }
+
       // Windows stages the installer to disk before the task is created, so
       // this can fail on a bad download — which belongs in the dialog the user
       // is looking at, not in a log they would have to go find.

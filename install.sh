@@ -3,7 +3,8 @@
 # Arbitrage with CrossEx — macOS installer.
 #
 # Usage (paste into Terminal):
-#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/install.sh)"
+#   REF=<audited-commit-sha>
+#   BOROS_REF="$REF" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$REF/install.sh)"
 #
 # What this script does — and everything it does:
 #   1. Downloads a private copy of Node.js (official nodejs.org build, checksum
@@ -21,7 +22,7 @@
 # running version first (including any orphaned/wedged copy), so an old version
 # never lingers. Your keys and trade history (kept in ~/.boros-crossex/config and
 # ~/.boros-crossex/data) are never touched.
-# Uninstall: https://github.com/pendle-finance/arbitrage-with-crossex#uninstall
+# Uninstall: https://github.com/mage1028/arbitrage-with-crossex#uninstall
 #
 # This script is bash-3.2 compatible (macOS system bash).
 
@@ -44,7 +45,7 @@ unset NODE_ENV
 # ---------------------------------------------------------------------------
 # Configuration (BOROS_* env vars exist for development/testing overrides)
 # ---------------------------------------------------------------------------
-REPO_SLUG="${BOROS_REPO:-pendle-finance/arbitrage-with-crossex}"
+REPO_SLUG="${BOROS_REPO:-mage1028/arbitrage-with-crossex}"
 BRANCH="${BOROS_BRANCH:-main}"
 # Pin an exact commit, tag or branch: BOROS_REF wins over BOROS_BRANCH. This is
 # how you install the very tree you audited — see "Install exactly what you
@@ -52,7 +53,9 @@ BRANCH="${BOROS_BRANCH:-main}"
 REF="${BOROS_REF:-}"
 PORT="${BOROS_PORT:-6688}"
 ROOT="${BOROS_ROOT:-$HOME/.boros-crossex}"
-NODE_LINE="v24"
+NODE_VERSION="v24.20.0"
+YARN_VERSION="1.22.22"
+YARN_TARBALL_SHA256="c17d3797fb9a9115bf375e31bfd30058cac6bc9c3b8807a3d8cb2094794b51ca"
 LABEL="com.boros.crossex-terminal"
 APP_TITLE="Arbitrage with CrossEx"
 LOG_DIR="$HOME/Library/Logs/boros-crossex"
@@ -98,20 +101,23 @@ node_arch() {
 
 install_node() {
   if [ -x "$ROOT/node/bin/node" ]; then
-    case "$("$ROOT/node/bin/node" -v 2>/dev/null)" in
-      "$NODE_LINE".*) say "Node.js $("$ROOT/node/bin/node" -v) already installed — skipping."; return ;;
-    esac
+    if [ "$("$ROOT/node/bin/node" -v 2>/dev/null)" = "$NODE_VERSION" ]; then
+      say "Node.js $NODE_VERSION already installed — skipping."
+      return
+    fi
   fi
-  local arch sums file dir
+  local arch expected file dir actual
   arch="$(node_arch)"
-  say "Downloading Node.js (official nodejs.org build, $arch)…"
-  sums="$(curl -fsSL --retry 3 "https://nodejs.org/dist/latest-$NODE_LINE.x/SHASUMS256.txt")"
-  file="$(printf '%s\n' "$sums" | grep -o "node-$NODE_LINE[0-9.]*-darwin-$arch\.tar\.gz" | head -1)"
-  [ -n "$file" ] || fail "could not resolve the latest Node.js $NODE_LINE tarball for darwin-$arch."
-  curl -fsSL --retry 3 -o "$TMP/$file" "https://nodejs.org/dist/latest-$NODE_LINE.x/$file"
+  case "$arch" in
+    arm64) expected="40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8" ;;
+    x64) expected="9e5b2644cf107befb6aefca676b96d3296bc10138096f022ed378d6233ed81f4" ;;
+  esac
+  file="node-$NODE_VERSION-darwin-$arch.tar.gz"
+  say "Downloading Node.js $NODE_VERSION (official nodejs.org build, $arch)…"
+  curl -fsSL --retry 3 -o "$TMP/$file" "https://nodejs.org/dist/$NODE_VERSION/$file"
   say "Verifying checksum…"
-  ( cd "$TMP" && printf '%s\n' "$sums" | grep "  $file\$" | shasum -a 256 -c - >/dev/null ) \
-    || fail "Node.js download failed checksum verification."
+  actual="$(/usr/bin/openssl dgst -sha256 "$TMP/$file" | awk '{print $NF}')"
+  [ "$actual" = "$expected" ] || fail "Node.js download failed checksum verification."
   dir="${file%.tar.gz}"
   rm -rf "$ROOT/$dir"
   tar -xzf "$TMP/$file" -C "$ROOT"
@@ -120,8 +126,15 @@ install_node() {
 }
 
 install_yarn() {
-  [ -x "$ROOT/node/bin/yarn" ] && return
-  say "Installing the yarn package manager (into the private runtime only)…"
+  if [ -x "$ROOT/node/bin/yarn" ] && [ "$("$ROOT/node/bin/yarn" -v 2>/dev/null)" = "$YARN_VERSION" ]; then
+    return
+  fi
+  local tgz actual
+  tgz="$TMP/yarn-$YARN_VERSION.tgz"
+  say "Installing Yarn $YARN_VERSION (into the private runtime only)…"
+  curl -fsSL --retry 3 -o "$tgz" "https://registry.npmjs.org/yarn/-/yarn-$YARN_VERSION.tgz"
+  actual="$(/usr/bin/openssl dgst -sha256 "$tgz" | awk '{print $NF}')"
+  [ "$actual" = "$YARN_TARBALL_SHA256" ] || fail "Yarn download failed checksum verification."
   # --prefix is not optional here. npm's global prefix follows its own config,
   # not the binary that was invoked: a user ~/.npmrc with prefix=~/.npm-global
   # (a common no-sudo setup) would scatter yarn outside the private runtime —
@@ -130,7 +143,7 @@ install_yarn() {
   # in one delete, which is the promise the installer makes. (install.ps1
   # carries the same guard for Windows' %APPDATA%\npm default.)
   PATH="$ROOT/node/bin:$PATH" "$ROOT/node/bin/npm" install -g --silent \
-    --prefix "$ROOT/node" yarn@1.22.22
+    --prefix "$ROOT/node" "$tgz"
   [ -x "$ROOT/node/bin/yarn" ] || fail "yarn installation failed (expected $ROOT/node/bin/yarn)."
 }
 

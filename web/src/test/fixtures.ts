@@ -211,7 +211,9 @@ export function versionHandler(over: Partial<UpdateStatus> = {}) {
         current: '1.0.0',
         install: null,
         latest: '1.0.0',
-        latestCommit: null,
+        latestCommit: over.updateAvailable
+          ? '3f7c1b9e2d4a6058cbe1740f9a2d5b83c6e0f1a4'
+          : null,
         updateAvailable: false,
         highlights: [],
         ...over,

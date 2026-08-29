@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useInstallWatch, useRunUpdate, useUpdateLog, useVersion } from '../api/queries';
-import { INSTALL_CMD, INSTALL_CMD_WINDOWS, REPO_URL } from '../lib/app';
+import { installCmd, installCmdWindows, REPO_URL } from '../lib/app';
 import { readUpdateLog, UPDATE_PHASES } from '../lib/updateProgress';
 import { CopyBlock } from './CopyBlock';
 import { Modal } from './Modal';
@@ -14,7 +14,6 @@ type Os = 'macos' | 'windows';
 type Route = 'auto' | 'manual';
 
 const OS_LABEL: Record<Os, string> = { macos: 'macOS', windows: 'Windows' };
-const INSTALL_BY_OS: Record<Os, string> = { macos: INSTALL_CMD, windows: INSTALL_CMD_WINDOWS };
 const thisMachine = (): Os => (navigator.userAgent.includes('Windows') ? 'windows' : 'macos');
 
 const LINK_CLASS =
@@ -188,9 +187,13 @@ export function UpdateIndicator() {
     }
   }, [installedCommit, servingCommit]);
 
-  if (!data?.updateAvailable || !data.latest) return null;
+  if (!data?.updateAvailable || !data.latest || !data.latestCommit) return null;
 
-  const target = data.latestCommit ?? 'main';
+  const target = data.latestCommit;
+  const installByOs: Record<Os, string> = {
+    macos: installCmd(target),
+    windows: installCmdWindows(target),
+  };
   const changesUrl = data.install?.commit
     ? `${REPO_URL}/compare/${data.install.commit}...${target}`
     : `${REPO_URL}/commits/${target}`;
@@ -287,7 +290,7 @@ export function UpdateIndicator() {
                         }))}
                       />
                     </div>
-                    <CopyBlock text={INSTALL_BY_OS[os]} />
+                    <CopyBlock text={installByOs[os]} />
                   </>
                 )}
               </div>
