@@ -38,7 +38,8 @@ Paste this into the **Terminal** app (Finder → Applications → Utilities → 
 press Return:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/install.sh)"
+REF=<audited-commit-sha>
+BOROS_REF="$REF" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$REF/install.sh)"
 ```
 
 When it finishes (a few minutes the first time), the terminal opens in your browser at
@@ -58,7 +59,8 @@ PowerShell** is fine — no need to install anything first). Press `Win`, type
 `PowerShell`, open it, then paste:
 
 ```powershell
-irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/install.ps1 | iex
+$env:BOROS_REF = '<audited-commit-sha>'
+irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/install.ps1" | iex
 ```
 
 When it finishes, the terminal opens in your browser at **http://localhost:6688** —
@@ -141,7 +143,8 @@ for a Gate.io API key:
 **macOS**
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/uninstall.sh)"
+REF=<installed-commit-sha>
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$REF/uninstall.sh)"
 ```
 
 Keys and trade history in `~/.boros-crossex` are kept; append ` -- --purge` to remove
@@ -150,13 +153,14 @@ those too (or `rm -rf ~/.boros-crossex`).
 **Windows**
 
 ```powershell
-irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/uninstall.ps1 | iex
+$env:BOROS_REF = '<installed-commit-sha>'
+irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/uninstall.ps1" | iex
 ```
 
 Keys and trade history in `%LOCALAPPDATA%\CrossEx-Boros` are kept. To remove those too:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/uninstall.ps1))) -Purge
+& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/uninstall.ps1"))) -Purge
 ```
 
 Either way this stops and removes the background service, the app, its private Node.js
@@ -175,22 +179,23 @@ trade journal out from under a live process that is still placing orders.
 - **The app is not reachable from the network.** The server binds to `127.0.0.1`
   (this-machine-only) and additionally rejects any request whose Host/Origin isn't
   localhost. Nobody on your Wi-Fi can see it.
-- **No telemetry, no analytics.** The app's only outbound requests are: `api.gateio.ws`
+- **Limited identification, no third-party analytics SDK.** Outbound requests include `api.gateio.ws`
   (signed, your account and orders); `api.boros.finance` (public market data, keyed only
   by an EVM address you choose to enter); the venues' public order-book endpoints
   (`fapi.binance.com`, `api.bybit.com`, `www.okx.com`, `futures.kraken.com`,
-  `api.hyperliquid.xyz`, `api.gateio.ws`) — public data, nothing about you; and
-  `raw.githubusercontent.com` — a 6-hourly read of this repo's one-line `version.json`
-  to show "update available". Nothing is ever sent, and `UPDATE_CHECK=0` disables it.
-  The installer downloads only from `nodejs.org` and `github.com`.
-- **Other accounts on your computer can't drive it.** Binding to loopback stops the
-  network; it does not stop another local process from simply calling the API. So every
-  request that can read your account or trade must carry a random token, created on
-  first run and stored — readable only by you — in `~/.boros-crossex/config/api-token`
-  (macOS) or `%LOCALAPPDATA%\CrossEx-Boros\config\api-token` (Windows). Your browser
-  gets it automatically from the page. The same limit as your keys applies, and it is
-  worth saying plainly: **anything running as you can read both.** Scripting the API
-  yourself:
+  `api.hyperliquid.xyz`, `api.gateio.ws`) — public data, nothing about you; GitHub
+  API/raw endpoints for the update check; and Google Fonts. Boros requests include
+  the app version plus an `_active` flag after Gate credentials are configured.
+  Opening the share-position dialog sends its encoded position snapshot and optional
+  tracked address to Boros to create a short link. `UPDATE_CHECK=0` disables only the
+  GitHub update check. Installers download from `nodejs.org`, `registry.npmjs.org`,
+  `registry.yarnpkg.com`, and GitHub.
+- **The current local-auth bootstrap does not isolate OS users.** Binding to loopback
+  stops the network, but localhost is shared by every process on the machine. The random
+  API token is stored owner-only, yet the current SPA bootstrap also embeds it in the
+  unauthenticated HTML response. Until that bootstrap is replaced, another local process
+  or OS account may retrieve the token and drive authenticated routes. Treat the host as
+  trusted and do not use real credentials on a shared machine. Scripting the API yourself:
   `curl -H "x-arb-token: $(cat ~/.boros-crossex/config/api-token)" http://localhost:6688/api/positions`.
   Rotate it by deleting the file and restarting the app (open tabs then need a reload).
 - **It can't withdraw your funds** — and if you created the key as described above,
@@ -198,14 +203,14 @@ trade journal out from under a live process that is still placing orders.
 
 ## Install exactly what you audited
 
-The one-line installers above fetch the current tip of `main`. That is the right default
-for staying current, but it means the code can change between the moment you (or an AI)
-read it and the moment you run it — and again on every update. To close that gap:
+The installers above require an audited commit SHA. The installer and application archive
+are both fetched from that immutable Git tree, so the code cannot move between review and
+execution. To choose that commit:
 
 **1. Pin a commit.** Clone the repo and note the exact tree you are about to audit:
 
 ```bash
-git clone https://github.com/pendle-finance/arbitrage-with-crossex
+git clone https://github.com/mage1028/arbitrage-with-crossex
 cd arbitrage-with-crossex
 git log -1 --format=%H     # ← this commit is what you are auditing
 ```
@@ -218,12 +223,12 @@ same commit, so the script you run is the one you read):
 
 ```bash
 REF=<commit-sha>
-BOROS_REF=$REF /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/$REF/install.sh)"
+BOROS_REF=$REF /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$REF/install.sh)"
 ```
 
 ```powershell
 $env:BOROS_REF = '<commit-sha>'
-irm "https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/$($env:BOROS_REF)/install.ps1" | iex
+irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/install.ps1" | iex
 ```
 
 …or straight from the clone you just audited, with no second download at all:
@@ -237,16 +242,14 @@ BOROS_TARBALL=../boros.tgz bash install.sh
 exact commit installed, and when — a source checkout says so instead. The same data is on
 `GET /api/version`.
 
-Re-running the plain one-liner takes you back to the tip of `main`; re-pin if you want to
-stay on an audited commit.
-
-**What is and isn't verified, honestly.** The Node.js runtime download is SHA-256-checked
-against nodejs.org's published manifest. The app archive comes from GitHub over TLS but is
+**What is and isn't verified, honestly.** The Node.js and Yarn downloads are checked
+against embedded SHA-256 values recorded in this audited tree. The app archive comes from GitHub over TLS but is
 **not signed and carries no separate checksum** — GitHub's generated archives are not
 byte-stable, so publishing a hash of one would break spuriously and train you to ignore
 the failure. Pinning a commit and auditing that commit is the integrity story. JavaScript
-dependencies are locked by the committed `yarn.lock` files and installed with
-`--frozen-lockfile`.
+dependencies are exact in both manifests, locked by the committed `yarn.lock` files,
+and installed with `--frozen-lockfile`. See
+[docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md) for the full baseline.
 
 ## Verify this project yourself with AI
 
@@ -259,11 +262,11 @@ of this repo for an even deeper read.
 I'm considering installing an open-source crypto trading tool on my Mac, and I want you
 to audit it before I run anything.
 
-Repository:  https://github.com/pendle-finance/arbitrage-with-crossex
+Repository:  https://github.com/mage1028/arbitrage-with-crossex
 Commit to audit:  <paste the commit SHA you pinned — or "main" for the current tip>
-Source tree at that commit:  https://github.com/pendle-finance/arbitrage-with-crossex/tree/<commit>
-Installer I would run:  https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/<commit>/install.sh
-Uninstaller:  https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/<commit>/uninstall.sh
+Source tree at that commit:  https://github.com/mage1028/arbitrage-with-crossex/tree/<commit>
+Installer I would run:  https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/<commit>/install.sh
+Uninstaller:  https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/<commit>/uninstall.sh
 
 Please read the installer, the uninstaller, and the application source code, then answer:
 

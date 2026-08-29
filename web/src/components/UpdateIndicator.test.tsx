@@ -2,11 +2,15 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunUpdateResponse, UpdateProgress, UpdateStatus } from '../api/types';
-import { INSTALL_CMD, INSTALL_CMD_WINDOWS } from '../lib/app';
+import { installCmd, installCmdWindows } from '../lib/app';
 import { versionHandler } from '../test/fixtures';
 import { env, server } from '../test/server';
 import { renderWithClient } from '../test/utils';
 import { UpdateIndicator } from './UpdateIndicator';
+
+const TARGET_SHA = '3f7c1b9e2d4a6058cbe1740f9a2d5b83c6e0f1a4';
+const INSTALL_CMD = installCmd(TARGET_SHA);
+const INSTALL_CMD_WINDOWS = installCmdWindows(TARGET_SHA);
 
 function updateHandler(calls: unknown[], refusal?: string) {
   return http.post('/api/version/update', () => {
@@ -43,7 +47,7 @@ const manualRoute = () => fireEvent.click(screen.getByRole('radio', { name: 'Run
 /** An install-info block, so a test can say which commit is being served. */
 function installedAt(commit: string): UpdateStatus['install'] {
   return {
-    repo: 'pendle-finance/arbitrage-with-crossex',
+    repo: 'mage1028/arbitrage-with-crossex',
     requestedRef: 'refs/heads/main',
     commit,
     source: 'github-archive',
@@ -95,7 +99,7 @@ describe('UpdateIndicator', () => {
     expect([INSTALL_CMD, INSTALL_CMD_WINDOWS].filter((c) => screen.queryByText(c))).toHaveLength(0);
     expect(screen.getByRole('link', { name: /Full changelog/ })).toHaveAttribute(
       'href',
-      'https://github.com/pendle-finance/arbitrage-with-crossex/blob/main/CHANGELOG.md',
+      'https://github.com/mage1028/arbitrage-with-crossex/blob/main/CHANGELOG.md',
     );
   });
 
@@ -116,7 +120,7 @@ describe('UpdateIndicator', () => {
   it('links the diff from the installed commit', async () => {
     await openModal({
       install: {
-        repo: 'pendle-finance/arbitrage-with-crossex',
+        repo: 'mage1028/arbitrage-with-crossex',
         requestedRef: 'main',
         commit: 'abc1234',
         source: 'install.sh',
@@ -125,7 +129,7 @@ describe('UpdateIndicator', () => {
     });
     expect(screen.getByRole('link', { name: /code changes/ })).toHaveAttribute(
       'href',
-      'https://github.com/pendle-finance/arbitrage-with-crossex/compare/abc1234...main',
+      `https://github.com/mage1028/arbitrage-with-crossex/compare/abc1234...${TARGET_SHA}`,
     );
   });
 
@@ -133,7 +137,7 @@ describe('UpdateIndicator', () => {
     await openModal();
     expect(screen.getByRole('link', { name: /code changes/ })).toHaveAttribute(
       'href',
-      'https://github.com/pendle-finance/arbitrage-with-crossex/commits/main',
+      `https://github.com/mage1028/arbitrage-with-crossex/commits/${TARGET_SHA}`,
     );
   });
 
@@ -142,7 +146,7 @@ describe('UpdateIndicator', () => {
     await openModal({
       latestCommit: sha,
       install: {
-        repo: 'pendle-finance/arbitrage-with-crossex',
+        repo: 'mage1028/arbitrage-with-crossex',
         requestedRef: 'main',
         commit: 'abc1234',
         source: 'install.sh',
@@ -152,15 +156,11 @@ describe('UpdateIndicator', () => {
 
     expect(screen.getByRole('link', { name: /code changes/ })).toHaveAttribute(
       'href',
-      `https://github.com/pendle-finance/arbitrage-with-crossex/compare/abc1234...${sha}`,
+      `https://github.com/mage1028/arbitrage-with-crossex/compare/abc1234...${sha}`,
     );
-    // The command the user pastes is the one on the landing page and in the
-    // README. A 40-character ref in front of it is a sha to check against a
-    // link that already shows the same thing — and the server pins the
-    // one-click install to that commit either way.
+    // The manual route uses the same immutable commit as the one-click path.
     manualRoute();
-    expect(screen.getByText(INSTALL_CMD)).toBeInTheDocument();
-    expect(screen.queryByText(new RegExp(sha))).toBeNull();
+    expect(screen.getByText(installCmd(sha))).toBeInTheDocument();
   });
 
   it('the button runs the update once, then shows what the installer is doing', async () => {
@@ -274,7 +274,7 @@ describe('UpdateIndicator', () => {
               current: '1.0.0',
               install: installedAt((served <= 2 ? 'a' : 'b').repeat(40)),
               latest: '1.2.0',
-              latestCommit: null,
+              latestCommit: TARGET_SHA,
               updateAvailable: true,
               highlights: [],
             }),

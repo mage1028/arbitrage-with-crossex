@@ -12,11 +12,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { FetchLike } from '../core/boros/client';
 
-export const VERSION_URL =
-  'https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/version.json';
+export const REPOSITORY_SLUG = 'mage1028/arbitrage-with-crossex';
 export const COMMIT_URL =
-  'https://api.github.com/repos/pendle-finance/arbitrage-with-crossex/git/ref/heads/main';
+  `https://api.github.com/repos/${REPOSITORY_SLUG}/git/ref/heads/main`;
 export const COMMIT_SHA = /^[0-9a-f]{40}$/;
+export const versionUrlAt = (commit: string): string =>
+  `https://raw.githubusercontent.com/${REPOSITORY_SLUG}/${commit}/version.json`;
 const FETCH_TIMEOUT_MS = 5_000;
 /** Cap on remote highlights — the modal is a nudge, not a changelog. */
 const MAX_HIGHLIGHTS = 10;
@@ -106,14 +107,20 @@ export function compareVersions(a: string, b: string): number | null {
  * window, not a retry storm). */
 export async function fetchLatestVersion(fetchImpl: FetchLike): Promise<RemoteVersion | null> {
   try {
-    const res = await fetchImpl(VERSION_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const commit = await fetchMainCommit(fetchImpl);
+    if (!commit) return null;
+    // Read version.json from the SAME immutable commit. Reading mutable main
+    // first and its SHA second creates a TOCTOU pair during every release.
+    const res = await fetchImpl(versionUrlAt(commit), {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const body = (await res.json()) as { version?: unknown; highlights?: unknown };
     if (typeof body.version !== 'string') return null;
     const highlights = Array.isArray(body.highlights)
       ? body.highlights.filter((h): h is string => typeof h === 'string').slice(0, MAX_HIGHLIGHTS)
       : [];
-    return { version: body.version, highlights, commit: await fetchMainCommit(fetchImpl) };
+    return { version: body.version, highlights, commit };
   } catch {
     return null;
   }

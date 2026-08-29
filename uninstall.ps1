@@ -1,13 +1,14 @@
 <#
   Arbitrage with CrossEx - Windows uninstaller.
 
-    irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/uninstall.ps1 | iex
+    $env:BOROS_REF = '<installed-commit-sha>'
+    irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/uninstall.ps1" | iex
 
   Removes the background task, the app, and its private Node.js runtime.
   Your API keys (config\) and trade history (data\) are KEPT unless you pass
   -Purge:
 
-    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/pendle-finance/arbitrage-with-crossex/main/uninstall.ps1))) -Purge
+    & ([scriptblock]::Create((irm "https://raw.githubusercontent.com/mage1028/arbitrage-with-crossex/$($env:BOROS_REF)/uninstall.ps1"))) -Purge
 
   This is the Windows counterpart of uninstall.sh; the two are kept in step.
 #>
