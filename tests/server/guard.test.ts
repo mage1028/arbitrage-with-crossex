@@ -54,6 +54,42 @@ describe('host/origin guard', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('accepts an exact configured HTTPS host and origin', async () => {
+    app = makeTestApp({ trustedOrigins: ['https://crossarb.asunamage.xyz'] });
+    const res = await app.inject({
+      method: 'GET',
+      url: URL,
+      headers: {
+        'x-arb-token': HOST['x-arb-token'],
+        host: 'crossarb.asunamage.xyz',
+        origin: 'https://crossarb.asunamage.xyz',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('does not trust a sibling or suffix host', async () => {
+    app = makeTestApp({ trustedOrigins: ['https://crossarb.asunamage.xyz'] });
+    for (const host of ['evil.asunamage.xyz', 'crossarb.asunamage.xyz.evil.test']) {
+      const res = await app.inject({ method: 'GET', url: URL, headers: { ...HOST, host } });
+      expect(res.statusCode).toBe(403);
+    }
+  });
+
+  it('still rejects a foreign origin on the configured host', async () => {
+    app = makeTestApp({ trustedOrigins: ['https://crossarb.asunamage.xyz'] });
+    const res = await app.inject({
+      method: 'GET',
+      url: URL,
+      headers: {
+        'x-arb-token': HOST['x-arb-token'],
+        host: 'crossarb.asunamage.xyz',
+        origin: 'https://evil.asunamage.xyz',
+      },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   // A framed page is same-origin with /api, so the Host/Origin guard above lets
   // its requests straight through — anti-framing headers are the only thing
   // standing between a browsed website and a one-click Convert/Stop.

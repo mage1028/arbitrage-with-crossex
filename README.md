@@ -330,7 +330,8 @@ the **official `gate-api` Node SDK** (`^7.1.8`, which ships a native `CrossExApi
 
 ## Setup
 
-Package manager: **Yarn** (Classic 1.x). Node ≥ 20 (tested on 22 and 24; `.nvmrc` says 22).
+Package manager: **Yarn 1.22.22**. Node is pinned to **24.20.0** by `.nvmrc`,
+`.node-version`, CI, and the supply-chain verification script.
 
 ```bash
 yarn install              # server deps
@@ -345,8 +346,8 @@ GATE_API_KEY=...
 GATE_API_SECRET=...
 ```
 
-Scripts run with `tsx` (no build step). If `node`/`yarn` aren't on your PATH, this repo was
-tested with nvm Node v22 — `nvm use 22` first.
+Scripts run with `tsx` (no server build step). Use `nvm use` from the repository root,
+then verify `node --version` reports `v24.20.0` before installing dependencies.
 
 Install-time env vars (all optional): `BOROS_REF` (install an exact commit, tag or
 branch — see *Install exactly what you audited*), `BOROS_TARBALL`/`BOROS_ZIP` (install
@@ -355,7 +356,8 @@ from a local archive), `BOROS_PORT`, `BOROS_ROOT`, `BOROS_REPO`, `BOROS_BRANCH`.
 Deployment-relevant env vars (all optional): `UPDATE_CHECK` (set `0` to disable the
 GitHub version check), `PORT` (default 6688), `ARB_DATA_DIR`
 (trade-journal dir; default `<repo>/data`), `DOTENV_CONFIG_PATH` (where credentials are
-read from and saved to; default `<repo>/.env`). The macOS installer sets all three so
+read from and saved to; default `<repo>/.env`), and `TRUSTED_ORIGINS` (comma-separated
+exact HTTPS origins for an authenticated reverse proxy; localhost-only by default). The macOS installer sets all three so
 user data lives outside the auto-updated app directory.
 
 ## Web terminal — `yarn dev` / `yarn start`

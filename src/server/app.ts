@@ -1,6 +1,6 @@
 /**
  * Fastify app factory (no listen — tests drive it via app.inject()).
- * Owns the localhost-only origin guard, the {ok,data,meta}/{ok,error} envelope,
+ * Owns the localhost-by-default origin guard, the {ok,data,meta}/{ok,error} envelope,
  * and the error-category → HTTP-status mapping; routes stay thin.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -60,6 +60,10 @@ export interface AppDeps {
    * buildApp refuses to serve the trading API unauthenticated rather than let
    * a missing wire-up pass silently. */
   authToken?: string;
+  /** Exact HTTPS origins allowed in addition to localhost. Empty by default.
+   * Intended for a private reverse proxy protected by Cloudflare Access; never
+   * use a wildcard here because the HTML response contains the API token. */
+  trustedOrigins?: string[];
   /** Test seam for the Boros backend client (defaults to global fetch). */
   borosFetch?: FetchLike;
   /**
@@ -127,6 +131,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // Host/Origin. No CORS headers are ever emitted.
   const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1)(:\d+)?$/;
   const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+  const trustedOrigins = new Set(deps.trustedOrigins ?? []);
+  const trustedHosts = new Set([...trustedOrigins].map((origin) => new URL(origin).host));
 
   // Fail closed on a missing wire-up: an optional field that silently
   // disables authentication is exactly the regression this catches.
@@ -149,8 +155,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
     const host = req.headers.host;
     const origin = req.headers.origin;
-    const hostOk = host !== undefined && LOCAL_HOST_RE.test(host);
-    const originOk = origin === undefined || LOCAL_ORIGIN_RE.test(origin);
+    const hostOk =
+      host !== undefined && (LOCAL_HOST_RE.test(host) || trustedHosts.has(host.toLowerCase()));
+    const originOk =
+      origin === undefined || LOCAL_ORIGIN_RE.test(origin) || trustedOrigins.has(origin);
     if (!hostOk || !originOk) {
       return reply
         .code(403)

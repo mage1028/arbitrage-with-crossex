@@ -28,6 +28,24 @@ const port = Number(process.env.PORT ?? 6688);
 // Loopback only, always: this server exposes a credentialed trading API and
 // must never be reachable off the machine that runs it.
 const host = '127.0.0.1';
+const trustedOrigins = (process.env.TRUSTED_ORIGINS ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error(`TRUSTED_ORIGINS entry must be an HTTPS origin: ${value}`);
+    }
+    return url.origin;
+  });
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 // Overridable so installed deployments can keep user data outside the app dir
 // (which updates wipe). Defaults preserve the repo-rooted dev layout.
@@ -159,6 +177,7 @@ const webDist = path.join(repoRoot, 'web', 'dist');
 
 const appDeps = {
   getClients,
+  trustedOrigins,
   // The same cache the Boros agent wiring above reads markets through, so a
   // MarketAcc pack and a priced panel can never disagree.
   cache,
